@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 
-import 'features/home/foundation_home_screen.dart';
+import 'core/api_client.dart';
+import 'features/home/home_screen.dart';
 
 void main() {
   runApp(const ScreeningSupportApp());
 }
 
-/// Week 1 application shell. Feature workflows are intentionally deferred.
+/// Application shell.
 class ScreeningSupportApp extends StatelessWidget {
-  const ScreeningSupportApp({super.key});
+  const ScreeningSupportApp({super.key, this.apiClient});
+
+  /// Injected in widget tests to avoid real network calls; defaults to a
+  /// real [ApiClient] talking to [apiBaseUrl] at runtime.
+  final ApiClient? apiClient;
 
   @override
   Widget build(BuildContext context) {
@@ -19,7 +24,7 @@ class ScreeningSupportApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
       ),
-      home: const FoundationHomeScreen(),
+      home: HomeScreen(apiClient: apiClient),
     );
   }
 }

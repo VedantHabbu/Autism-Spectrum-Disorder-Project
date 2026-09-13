@@ -1,5 +1,5 @@
 name: asd_nlp_screening_app
-description: Week 1 Flutter foundation for the ASD screening-support prototype.
+description: Flutter client for the ASD screening-support prototype.
 publish_to: "none"
 version: 0.1.0+1
 
@@ -9,6 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  http: ^1.2.0
 
 dev_dependencies:
   flutter_test:
