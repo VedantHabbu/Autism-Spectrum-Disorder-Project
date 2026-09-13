@@ -1,6 +1,10 @@
-# Initial API Contract
+# API Contract
 
-Base path: `/api/v1`. All JSON requests and responses use `application/json`. The only implemented endpoint in Week 1 is `GET /health`; the versioned observation and analysis endpoints below are agreed contracts for subsequent work, not current functionality.
+Base path: `/api/v1`. All JSON requests and responses use `application/json`.
+
+**Implemented and working (no Supabase needed):** `GET /health`, `POST /api/v1/analyze-observation`.
+
+**Implemented as contract only (routes, schemas, validation) — return `503`** until Supabase/PostgreSQL is configured (`app/core/persistence.py`): `POST /api/v1/auth/sign-up`, `POST /api/v1/auth/login`, `POST /api/v1/children`, `GET /api/v1/children/{child_id}`, `POST /api/v1/observation-periods`, `POST /api/v1/observations`, `GET /api/v1/observations`, `GET /api/v1/observations/{observation_id}`, `POST /api/v1/guided-observations`. Each 503 response body is `{"detail": "Persistence is not configured yet: Supabase/PostgreSQL integration is pending ..."}`. This is a deliberate decision — see the note at the end of this document.
 
 ## `GET /health`
 
@@ -14,15 +18,66 @@ Base path: `/api/v1`. All JSON requests and responses use `application/json`. Th
 {"status":"ok","service":"asd-nlp-backend","version":"0.1.0"}
 ```
 
-**Validation:** none.
+## `POST /api/v1/analyze-observation` — implemented (Week 3)
 
-**Expected errors:** `500` only for an unexpected service failure.
-
-## `POST /api/v1/observations` — planned
-
-**Purpose:** create and persist a caregiver source observation. Persistence will be introduced with the Supabase/PostgreSQL integration.
+**Purpose:** run the rule-based NLP pipeline (`docs/nlp-pipeline.md`) on submitted caregiver text and return structured behavioural events. Does not diagnose ASD and does not require persistence.
 
 **Request:**
+
+```json
+{"text": "He doesn't look towards me when I call his name."}
+```
+
+**Response (`200`):**
+
+```json
+{
+  "events": [
+    {
+      "domain": "response_to_name",
+      "status": "concern",
+      "negation_detected": true,
+      "evidence": "He doesn't look towards me when I call his name.",
+      "confidence": 0.7
+    }
+  ],
+  "disclaimer": "This output is an experimental NLP screening-support signal. It is not a diagnosis of ASD and does not replace clinical assessment."
+}
+```
+
+An observation can produce zero, one, or several events (one per matched domain per sentence). `confidence` is a heuristic, not a calibrated or clinical probability.
+
+**Validation:** `text` 1-4000 characters.
+
+**Expected errors:** `422` invalid input, `500` unexpected failure.
+
+## `POST /api/v1/auth/sign-up`, `POST /api/v1/auth/login` — contract only
+
+**Purpose:** caregiver authentication, delegated to Supabase Auth once configured.
+
+**Request (`SignUpRequest`/`LoginRequest`):** `{"email": "...", "password": "..."}` (password 8-128 chars).
+
+**Planned response (`AuthResponse`):** `{"caregiver_id": "...", "access_token": "...", "token_type": "bearer"}`.
+
+**Current behaviour:** `503` — see note below.
+
+## `POST /api/v1/children`, `GET /api/v1/children/{child_id}` — contract only
+
+**Request (`ChildCreateRequest`):** `{"display_name": "...", "date_of_birth": "YYYY-MM-DD"}` (`date_of_birth` optional).
+
+**Planned response (`ChildResponse`):** id, `caregiver_id`, `display_name`, `date_of_birth`, `created_at`, `updated_at`.
+
+**Current behaviour:** `503`.
+
+## `POST /api/v1/observation-periods` — contract only
+
+**Request (`ObservationPeriodCreateRequest`):** `{"child_id": "uuid", "start_at": "...", "end_at": "..."}` or `duration_days` (1-90) instead of `end_at`. Validation rejects `end_at` before `start_at`.
+
+**Current behaviour:** `503`.
+
+## `POST /api/v1/observations`, `GET /api/v1/observations`, `GET /api/v1/observations/{observation_id}` — contract only
+
+**Request (`ObservationCreateRequest`):**
 
 ```json
 {
@@ -34,52 +89,29 @@ Base path: `/api/v1`. All JSON requests and responses use `application/json`. Th
 }
 ```
 
-`context` and `observed_at` are optional in the planned request; the application will automatically record the timestamp when it is omitted.
+`context` must be one of the approved `ObservationContext` values (`playing`, `eating`, `social_interaction`, `outdoors`, `with_family`, `with_unfamiliar_people`, `other`); `observed_at` is optional and will be recorded automatically when omitted, once persistence exists.
 
-**Response (`201`, planned):** source observation identifier, child and period identifiers, preserved text, context, and timestamps.
+**Current behaviour:** `503`.
 
-**Validation:** valid UUIDs; non-empty text; text length limits to be finalized; context must be an approved value when supplied; period must belong to the specified child and authorized caregiver.
+## `POST /api/v1/guided-observations` — contract only
 
-**Expected errors:** `400` invalid input, `401` unauthenticated, `403` unauthorized, `404` child/period not found, `422` schema validation, `500` unexpected failure.
-
-## `GET /api/v1/observations/{observation_id}` — planned
-
-**Purpose:** retrieve one original observation and, when available, its linked structured behavioural events.
-
-**Request:** path parameter `observation_id` (UUID); no body.
-
-**Response (`200`, planned):** preserved source observation metadata plus zero or more linked events. The original text must always be returned to authorized reviewers.
-
-**Validation:** `observation_id` is a UUID and caller is authorized to access its child record.
-
-**Expected errors:** `401` unauthenticated, `403` unauthorized, `404` not found, `422` invalid UUID, `500` unexpected failure.
-
-## `POST /api/v1/analyze-observation` — planned
-
-**Purpose:** submit source text for future NLP interpretation. It does not diagnose ASD. At the implemented stage, this endpoint is intentionally absent until the extraction approach and persistence workflow are introduced.
-
-**Request:**
+**Request (`GuidedObservationCreateRequest`):**
 
 ```json
 {
-  "text": "He doesn't look towards me when I call his name."
+  "child_id": "uuid",
+  "observation_period_id": "uuid",
+  "domain": "eye_contact",
+  "choice": "observed_with_concern",
+  "note": "optional free-text note",
+  "context": "playing"
 }
 ```
 
-**Planned response (`200`):**
+`domain` must be one of the 10 behavioural-taxonomy keys; `choice` must be one of `observed_normally`, `observed_with_concern`, `not_observed`, `not_sure`.
 
-```json
-{
-  "domain": "response_to_name",
-  "status": "concern",
-  "negation_detected": true,
-  "evidence": "doesn't look towards me when I call his name",
-  "confidence": 0.91
-}
-```
+**Current behaviour:** `503`.
 
-The response is illustrative contract data only; it is not implemented NLP logic and the confidence value is not a clinical probability.
+## Why these routes return 503 instead of using a local database
 
-**Validation:** non-empty text; text length limit to be finalized; content must be handled as de-identified/synthetic data in student development.
-
-**Expected errors:** `400` invalid input, `401`/`403` when future access control applies, `422` schema validation, `503` analysis service unavailable, `500` unexpected failure.
+No Supabase project/credentials exist yet for this student prototype. Rather than build a SQLite or in-memory substitute that would need to be rewritten once Supabase is configured (and could mask persistence-layer bugs behind fake data), every persistence-backed route's request/response contract, validation, and routing is fully implemented and tested (`backend/tests/test_schema_validation.py`, `backend/tests/test_pending_persistence_routes.py`), and the route itself returns a clear `503` via the shared `require_persistence` dependency (`app/core/persistence.py`) until real Supabase/PostgreSQL credentials are wired in. At that point, only the repository/data-access layer needs to be added — no API contract changes.

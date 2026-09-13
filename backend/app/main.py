@@ -1,4 +1,4 @@
-"""FastAPI application entry point for the Week 1 foundation."""
+"""FastAPI application entry point."""
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,8 +11,8 @@ app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
     description=(
-        "Week 1 backend foundation for an ASD screening-support prototype. "
-        "This service does not diagnose ASD."
+        "Backend for an ASD screening-support prototype. This service "
+        "does not diagnose ASD."
     ),
 )
 
@@ -27,5 +27,5 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(api_v1_router)
 
-# Planned routes are documented in docs/api-contract.md. They are intentionally
-# not registered until persistence and NLP implementation begin in later weeks.
+# See docs/api-contract.md for which routes are fully implemented versus
+# contract-only pending Supabase/PostgreSQL integration.
