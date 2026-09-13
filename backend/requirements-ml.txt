@@ -1,0 +1,7 @@
+# Offline dataset/EDA/structured-baseline tooling (backend/ml/).
+# Not imported by the running FastAPI service (backend/app/) — install
+# separately only when working on dataset preparation or model training.
+pandas>=2.2,<3.1
+numpy>=1.26,<3.0
+scikit-learn>=1.5,<2.0
+joblib>=1.4,<2.0
