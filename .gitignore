@@ -34,3 +34,4 @@ Thumbs.db
 data/raw/
 data/processed/
 reports/
+.claude/launch.json
