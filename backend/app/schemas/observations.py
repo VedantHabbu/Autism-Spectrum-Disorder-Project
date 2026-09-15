@@ -13,7 +13,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.schemas.common import ObservationContext
+from app.schemas.common import ObservationContext, ObservationSourceType
 
 NOT_A_DIAGNOSIS_DISCLAIMER = (
     "This output is an experimental NLP screening-support signal. It is "
@@ -22,7 +22,12 @@ NOT_A_DIAGNOSIS_DISCLAIMER = (
 
 
 class ObservationCreateRequest(BaseModel):
-    """Request schema for source-observation persistence (storage pending)."""
+    """Request schema for source-observation persistence (storage pending).
+
+    Carries no source_type: this route always records a free-text diary
+    entry, and the server assigns ObservationSourceType.FREE_TEXT. Guided
+    entries are created through POST /api/v1/guided-observations instead.
+    """
 
     child_id: UUID
     observation_period_id: UUID
@@ -32,12 +37,19 @@ class ObservationCreateRequest(BaseModel):
 
 
 class ObservationResponse(BaseModel):
-    """Response schema for a persisted observation (storage pending)."""
+    """Response schema for a persisted observation (storage pending).
+
+    Covers both entry types, so `text` is optional: a guided observation's
+    free-text note is optional per the plan, while a free-text diary entry
+    always has text (enforced by the observations table's check
+    constraints, not by this schema).
+    """
 
     id: UUID
     child_id: UUID
     observation_period_id: UUID | None
-    text: str
+    source_type: ObservationSourceType
+    text: str | None
     context: ObservationContext | None
     observed_at: datetime
     created_at: datetime

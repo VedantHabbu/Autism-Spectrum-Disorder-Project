@@ -64,6 +64,8 @@ Structured records are converted into caregiver-style free-text observations per
 2. `validate_narratives.py` — mechanically checks every row's text against the template pool registered for its own (domain, status) pair, and confirms it does **not** also match the opposite-status pool. All 10,540 rows pass. This is the concrete implementation of "validate that generated text does not introduce symptoms absent from the source record."
 3. `split_dataset.py` — splits narratives into train/val/test (7,370 / 1,580 / 1,590 rows) using the **same Case_No partition** as the structured baseline, then asserts no `Case_No` appears in more than one split file. This prevents narrative variants generated from one record from leaking across splits.
 
+**Context fillers must stay behaviourally neutral.** Each narrative optionally appends an observation-context phrase (" at mealtimes", " around unfamiliar people", ...). These vary the *setting* only and must never carry a behavioural claim or a negation of their own. This was violated once: the `with_unfamiliar_people` filler read " around people he doesn't know", and that "doesn't" was picked up by the NLP pipeline's sentence-level negation detection, flipping the extracted status of otherwise-positive narratives across 14.3% of the dataset (and hardcoding a gender the source record may contradict). Two regression tests now enforce the invariant — `test_context_phrases_introduce_no_negation`, which checks each filler against the real negation detector rather than a word list, and `test_context_phrases_use_no_gendered_pronoun`.
+
 Reproduce with (from the repo root, with `backend/.venv` active and `backend/requirements-ml.txt` installed):
 
 ```bash

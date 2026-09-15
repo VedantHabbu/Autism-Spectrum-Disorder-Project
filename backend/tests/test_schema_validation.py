@@ -13,9 +13,13 @@ from pydantic import ValidationError
 
 from app.schemas.auth import LoginRequest, SignUpRequest
 from app.schemas.children import ChildCreateRequest
-from app.schemas.guided_observations import GuidedObservationCreateRequest
+from app.schemas.common import ObservationSourceType
+from app.schemas.guided_observations import (
+    GuidedObservationCreateRequest,
+    GuidedObservationResponse,
+)
 from app.schemas.observation_periods import ObservationPeriodCreateRequest
-from app.schemas.observations import ObservationCreateRequest
+from app.schemas.observations import ObservationCreateRequest, ObservationResponse
 
 
 def test_sign_up_rejects_short_password() -> None:
@@ -113,3 +117,118 @@ def test_guided_observation_accepts_valid_input() -> None:
         choice="observed_normally",
     )
     assert request.choice == "observed_normally"
+
+
+def test_observation_period_derives_end_at_from_duration_days() -> None:
+    request = ObservationPeriodCreateRequest(
+        child_id=uuid4(),
+        start_at=datetime(2026, 9, 1),
+        duration_days=7,
+    )
+    assert request.end_at == datetime(2026, 9, 8)
+
+
+def test_observation_period_accepts_consistent_end_at_and_duration_days() -> None:
+    request = ObservationPeriodCreateRequest(
+        child_id=uuid4(),
+        start_at=datetime(2026, 9, 1),
+        end_at=datetime(2026, 9, 8),
+        duration_days=7,
+    )
+    assert request.end_at == datetime(2026, 9, 8)
+
+
+def test_observation_period_rejects_conflicting_end_at_and_duration_days() -> None:
+    with pytest.raises(ValidationError, match="disagree"):
+        ObservationPeriodCreateRequest(
+            child_id=uuid4(),
+            start_at=datetime(2026, 9, 1),
+            end_at=datetime(2026, 9, 30),
+            duration_days=7,
+        )
+
+
+def test_observation_period_without_window_stays_open_ended() -> None:
+    request = ObservationPeriodCreateRequest(child_id=uuid4(), start_at=datetime(2026, 9, 1))
+    assert request.end_at is None
+
+
+def test_observation_create_request_does_not_accept_a_client_source_type() -> None:
+    # source_type is assigned by the server from the route used, so a client
+    # cannot record a guided entry as free text through this endpoint.
+    assert "source_type" not in ObservationCreateRequest.model_fields
+
+
+def test_observation_response_carries_source_type() -> None:
+    response = ObservationResponse(
+        id=uuid4(),
+        child_id=uuid4(),
+        observation_period_id=uuid4(),
+        source_type=ObservationSourceType.FREE_TEXT,
+        text="He waved goodbye.",
+        context=None,
+        observed_at=datetime(2026, 9, 1),
+        created_at=datetime(2026, 9, 1),
+    )
+    assert response.source_type is ObservationSourceType.FREE_TEXT
+
+
+def test_observation_response_allows_a_guided_entry_without_a_note() -> None:
+    response = ObservationResponse(
+        id=uuid4(),
+        child_id=uuid4(),
+        observation_period_id=uuid4(),
+        source_type=ObservationSourceType.GUIDED,
+        text=None,
+        context=None,
+        observed_at=datetime(2026, 9, 1),
+        created_at=datetime(2026, 9, 1),
+    )
+    assert response.text is None
+
+
+def test_observation_response_requires_source_type() -> None:
+    with pytest.raises(ValidationError):
+        ObservationResponse(
+            id=uuid4(),
+            child_id=uuid4(),
+            observation_period_id=uuid4(),
+            text="He waved goodbye.",
+            context=None,
+            observed_at=datetime(2026, 9, 1),
+            created_at=datetime(2026, 9, 1),
+        )
+
+
+def test_guided_observation_response_links_back_to_its_observation() -> None:
+    observation_id = uuid4()
+    response = GuidedObservationResponse(
+        id=uuid4(),
+        observation_id=observation_id,
+        child_id=uuid4(),
+        observation_period_id=uuid4(),
+        domain="eye_contact",
+        choice="not_observed",
+        note=None,
+        context=None,
+        observed_at=datetime(2026, 9, 1),
+        created_at=datetime(2026, 9, 1),
+    )
+    assert response.observation_id == observation_id
+    # "not observed" must stay distinct from a concerning observation.
+    assert response.choice == "not_observed"
+
+
+def test_guided_observation_response_requires_observation_id() -> None:
+    with pytest.raises(ValidationError):
+        GuidedObservationResponse(
+            id=uuid4(),
+            child_id=uuid4(),
+            observation_period_id=uuid4(),
+            domain="eye_contact",
+            choice="observed_normally",
+            note=None,
+            context=None,
+            observed_at=datetime(2026, 9, 1),
+            created_at=datetime(2026, 9, 1),
+        )

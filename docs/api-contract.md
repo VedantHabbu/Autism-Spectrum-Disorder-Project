@@ -71,7 +71,18 @@ An observation can produce zero, one, or several events (one per matched domain 
 
 ## `POST /api/v1/observation-periods` — contract only
 
-**Request (`ObservationPeriodCreateRequest`):** `{"child_id": "uuid", "start_at": "...", "end_at": "..."}` or `duration_days` (1-90) instead of `end_at`. Validation rejects `end_at` before `start_at`.
+**Request (`ObservationPeriodCreateRequest`):** `{"child_id": "uuid", "start_at": "...", "end_at": "..."}` or `duration_days` (1-90) instead of `end_at`.
+
+The monitoring window can be expressed three ways:
+
+| Supplied | Result |
+| --- | --- |
+| `end_at` only | Used as-is. |
+| `duration_days` only | Resolved to `end_at = start_at + duration_days` (the plan's "configurable monitoring window such as 7 days"), so consumers only ever read `end_at`. |
+| Both | Accepted only if they agree; a conflicting pair is rejected rather than silently preferring one. |
+| Neither | Open-ended period (`end_at` stays null, as the schema allows). |
+
+Validation also rejects `end_at` before `start_at`.
 
 **Current behaviour:** `503`.
 
@@ -91,6 +102,8 @@ An observation can produce zero, one, or several events (one per matched domain 
 
 `context` must be one of the approved `ObservationContext` values (`playing`, `eating`, `social_interaction`, `outdoors`, `with_family`, `with_unfamiliar_people`, `other`); `observed_at` is optional and will be recorded automatically when omitted, once persistence exists.
 
+The request deliberately carries **no `source_type`** — this route always records a free-text diary entry, and the server assigns `source_type: "free_text"`, so a client cannot record a guided entry as free text. `ObservationResponse` does return `source_type` (`free_text` | `guided`), because these endpoints read back both entry types from the shared `observations` table (see [database-schema.md](database-schema.md)). Its `text` field is nullable for that reason: a guided entry's note is optional, while a free-text entry always has text.
+
 **Current behaviour:** `503`.
 
 ## `POST /api/v1/guided-observations` — contract only
@@ -108,7 +121,9 @@ An observation can produce zero, one, or several events (one per matched domain 
 }
 ```
 
-`domain` must be one of the 10 behavioural-taxonomy keys; `choice` must be one of `observed_normally`, `observed_with_concern`, `not_observed`, `not_sure`.
+`domain` must be one of the 10 behavioural-taxonomy keys; `choice` must be one of `observed_normally`, `observed_with_concern`, `not_observed`, `not_sure`. `not_observed` is stored verbatim and never collapsed into a concern — the plan requires "behaviour not observed" to stay distinct from "behaviour absent/reduced".
+
+One call will write two linked rows: an `observations` row (`source_type: "guided"`, carrying child, period, context, timestamp, and the optional note) and a `guided_observation_responses` row holding the structured answer. `GuidedObservationResponse` therefore returns **`observation_id`** alongside `id`, so a guided answer can always be traced back to its source observation.
 
 **Current behaviour:** `503`.
 

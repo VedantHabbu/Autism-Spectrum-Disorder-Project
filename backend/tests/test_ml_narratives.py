@@ -11,6 +11,8 @@ pd = pytest.importorskip(
 )
 pytest.importorskip("sklearn", reason="backend/requirements-ml.txt not installed")
 
+from app.nlp.negation import is_negated  # noqa: E402
+from app.nlp.preprocessing import analyze  # noqa: E402
 from ml.data.dataset_split import stratified_case_split  # noqa: E402
 from ml.data.domain_mapping import (  # noqa: E402
     DOMAINS_WITHOUT_STRUCTURED_SIGNAL,
@@ -106,6 +108,36 @@ def test_context_phrases_never_change_domain_or_status() -> None:
         lowered = phrase.lower()
         for fragment in forbidden_fragments:
             assert fragment not in lowered
+
+
+def test_context_phrases_introduce_no_negation() -> None:
+    """A context filler must not carry a negation of its own.
+
+    Regression test: the `with_unfamiliar_people` filler was once " around
+    people he doesn't know", whose "doesn't" was picked up by sentence-level
+    negation detection and flipped the extracted status of otherwise-positive
+    narratives. Checked against the real detector rather than a word list, so
+    any future phrasing the pipeline would read as negated also fails.
+    """
+    for key, phrase in CONTEXT_PHRASES.items():
+        if not phrase.strip():
+            continue
+        doc = analyze(f"He plays with his toys{phrase}.")
+        for sentence in doc.sents:
+            assert not is_negated(sentence), (
+                f"context phrase {key!r} ({phrase!r}) introduces a negation, which would "
+                "invert the extracted status of narratives that use it"
+            )
+
+
+def test_context_phrases_use_no_gendered_pronoun() -> None:
+    # The dataset's records carry a Sex field; a filler hardcoding one gender
+    # would contradict the source record for roughly half of them.
+    for key, phrase in CONTEXT_PHRASES.items():
+        words = set(phrase.lower().replace(".", "").split())
+        assert not (words & {"he", "she", "his", "her", "him", "hers"}), (
+            f"context phrase {key!r} ({phrase!r}) hardcodes a gendered pronoun"
+        )
 
 
 def test_stratified_case_split_has_no_overlap_and_covers_all_cases() -> None:

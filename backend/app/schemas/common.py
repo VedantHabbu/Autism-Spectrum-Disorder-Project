@@ -5,6 +5,19 @@ from __future__ import annotations
 from enum import Enum
 
 
+class ObservationSourceType(str, Enum):
+    """How an observation was entered.
+
+    Both entry types are stored in the same observations table (see
+    backend/sql/001_initial_schema.sql); this is the discriminator. It is
+    assigned by the server from the route used, never taken from the
+    client, so a guided entry cannot be recorded as free text or vice versa.
+    """
+
+    FREE_TEXT = "free_text"
+    GUIDED = "guided"
+
+
 class ObservationContext(str, Enum):
     """Optional observation context (docs/requirements.md feature list)."""
 

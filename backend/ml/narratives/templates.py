@@ -121,6 +121,10 @@ CONTEXT_PHRASES: dict[str, str] = {
     "social_interaction": " when other people are around",
     "outdoors": " when we're outside",
     "with_family": " around the family",
-    "with_unfamiliar_people": " around people he doesn't know",
+    # Must not contain a negation word: this filler varies the setting only,
+    # and a "doesn't"/"never" here would be picked up by negation detection
+    # and flip the extracted status of an otherwise-positive sentence.
+    # Enforced by test_context_phrases_introduce_no_negation.
+    "with_unfamiliar_people": " around unfamiliar people",
     "other": "",
 }

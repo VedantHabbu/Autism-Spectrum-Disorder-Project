@@ -55,19 +55,42 @@ from "absent/reduced") is a guided-observation-only concept; see
 synthetic narrative dataset and checks whether the extractor recovers each
 row's known (domain, status). Latest run:
 
-| Metric | Result |
-| --- | --- |
-| Domain recall | 89.3% |
-| Domain + status accuracy | 74.3% |
-| No event extracted | 8.3% |
+| Metric | Result | Before the context-template fix |
+| --- | --- | --- |
+| Domain recall | 89.3% | 89.3% |
+| Domain + status accuracy | 79.0% | 74.3% |
+| No event extracted | 8.3% | 8.3% |
+
+The "before" column reflects a defect in the narrative templates, not in
+the extractor: the `with_unfamiliar_people` context filler used to read
+" around people he doesn't know", and that "doesn't" was picked up by
+sentence-level negation detection, flipping the extracted status of
+otherwise-positive narratives in 14.3% of rows. The filler is now
+" around unfamiliar people" and carries no behavioural claim of its own
+(regression test: `test_context_phrases_introduce_no_negation`).
+
+Note that domain recall is unchanged — the filler never affected domain
+matching — and that a few `concern` rows got *worse*: the injected
+"doesn't" had been making the extractor output `concern` for the wrong
+reason, masking the real limitation below.
 
 These numbers describe a template-generated dataset built from the same
 kind of literal phrasing the lexicon targets, so they should not be read
 as an estimate of real caregiver free-text accuracy — informal language,
 typos, and paraphrase robustness are explicitly Week 9 work, not
-attempted here. The gap between "domain recall" (89%) and "domain +
-status accuracy" (74%) is mostly the sentence-level negation-scoping
-limitation described above.
+attempted here.
+
+The remaining gap between domain recall (89.3%) and domain + status
+accuracy (79.0%) is concentrated in three known extractor limitations,
+all still open:
+
+1. **Concern is only detected via a negation word.** Concern expressed
+   lexically reads as `typical` — e.g. "It's hard to get her to make eye
+   contact with me", "language development seems behind".
+2. **Negation cues fire regardless of what they negate.** "holds eye
+   contact without trouble" reads as `concern` because of "without".
+3. **Sentence-level negation scoping** (described above), e.g. "episodes
+   of staring blankly that don't seem tied to anything".
 
 ## API endpoint
 

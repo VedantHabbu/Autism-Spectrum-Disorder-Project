@@ -1,5 +1,11 @@
 """Guided-observation schemas (docs/requirements.md guided-observation feature).
 
+Creating a guided observation writes two linked rows: an observations row
+(child, period, context, timestamp, optional note, source_type='guided')
+and a guided_observation_responses row holding the structured answer. The
+response below exposes observation_id so a guided answer can always be
+traced back to its source observation, per the plan's auditability rule.
+
 Storage pending Supabase/PostgreSQL integration (app/core/persistence.py).
 """
 
@@ -23,6 +29,7 @@ class GuidedObservationCreateRequest(BaseModel):
 
 class GuidedObservationResponse(BaseModel):
     id: UUID
+    observation_id: UUID
     child_id: UUID
     observation_period_id: UUID
     domain: BehaviouralDomain
