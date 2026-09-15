@@ -9,3 +9,9 @@ const String apiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
   defaultValue: 'http://127.0.0.1:8000',
 );
+
+/// Maximum observation length the backend accepts, mirroring
+/// ObservationAnalysisRequest.text in backend/app/schemas/observations.py.
+/// Keep these in sync: the client enforces it so the caregiver sees the
+/// limit while typing rather than hitting a 422 on submit.
+const int observationTextMaxLength = 4000;

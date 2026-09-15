@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/api_client.dart';
+import '../../core/api_config.dart';
 import '../../core/api_outcome.dart';
 import '../../core/uuid.dart';
 import '../../models/behavioural_event.dart';
@@ -103,6 +104,9 @@ class _FreeTextObservationScreenState extends State<FreeTextObservationScreen> {
           TextField(
             controller: _textController,
             maxLines: 4,
+            // Matches ObservationAnalysisRequest's server-side cap, so the
+            // limit is visible while typing instead of surfacing as a 422.
+            maxLength: observationTextMaxLength,
             decoration: const InputDecoration(
               labelText: 'What did you observe?',
               hintText: "e.g. He doesn't look towards me when I call his name.",

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:asd_nlp_screening_app/core/api_client.dart';
+import 'package:asd_nlp_screening_app/core/api_config.dart';
 import 'package:asd_nlp_screening_app/features/observation/free_text_observation_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -45,6 +46,51 @@ void main() {
     expect(find.textContaining('response to name'), findsOneWidget);
     expect(find.text('Concern'), findsOneWidget);
     expect(find.textContaining('Negation detected: yes'), findsOneWidget);
+  });
+
+  testWidgets('renders a readable message instead of the raw 422 body', (tester) async {
+    // FastAPI returns a list of Pydantic error objects; rendering it
+    // directly used to put "[{type: string_too_long, loc: [body, text]...}]"
+    // in front of the caregiver.
+    final mockClient = MockClient((request) async {
+      return http.Response(
+        jsonEncode({
+          'detail': [
+            {
+              'type': 'string_too_long',
+              'loc': ['body', 'text'],
+              'msg': 'String should have at most 4000 characters',
+              'ctx': {'max_length': 4000},
+            }
+          ]
+        }),
+        422,
+      );
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: FreeTextObservationScreen(apiClient: ApiClient(httpClient: mockClient)),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField).first, 'Some observation text.');
+    await tester.tap(find.text('Analyze'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.textContaining('4000-character limit'), findsOneWidget);
+    expect(find.textContaining('string_too_long'), findsNothing);
+    expect(find.textContaining('loc:'), findsNothing);
+  });
+
+  testWidgets('observation field caps input at the backend limit', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: FreeTextObservationScreen()),
+    );
+
+    final field = tester.widget<TextField>(find.byType(TextField).first);
+    expect(field.maxLength, observationTextMaxLength);
   });
 
   testWidgets('shows an empty-result message when no domain is recognized', (tester) async {

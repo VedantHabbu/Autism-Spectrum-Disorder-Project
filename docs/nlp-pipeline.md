@@ -55,11 +55,20 @@ from "absent/reduced") is a guided-observation-only concept; see
 synthetic narrative dataset and checks whether the extractor recovers each
 row's known (domain, status). Latest run:
 
-| Metric | Result | Before the context-template fix |
-| --- | --- | --- |
-| Domain recall | 89.3% | 89.3% |
-| Domain + status accuracy | 79.0% | 74.3% |
-| No event extracted | 8.3% | 8.3% |
+| Metric | Result | After context-template fix | Before both fixes |
+| --- | --- | --- | --- |
+| Domain recall | 93.7% | 89.3% | 89.3% |
+| Domain + status accuracy | 83.3% | 79.0% | 74.3% |
+| No event extracted | 4.0% | 8.3% | 8.3% |
+
+The latest column reflects two lexicon fixes: scoping overly broad
+single-lemma triggers (a bare "engage"/"talk" no longer claims a domain
+when the sentence is describing another domain's activity, e.g. "engages
+in pretend play", "talks on a toy phone"), and filling phrase gaps that
+missed legitimate wordings ("blank staring episodes", "doesn't react when
+a family member is upset"). Multi-word phrases and multi-lemma groups are
+never suppressed, so "engages with other kids during pretend play" still
+matches social_interaction.
 
 The "before" column reflects a defect in the narrative templates, not in
 the extractor: the `with_unfamiliar_people` context filler used to read
@@ -80,8 +89,8 @@ as an estimate of real caregiver free-text accuracy — informal language,
 typos, and paraphrase robustness are explicitly Week 9 work, not
 attempted here.
 
-The remaining gap between domain recall (89.3%) and domain + status
-accuracy (79.0%) is concentrated in three known extractor limitations,
+The remaining gap between domain recall (93.7%) and domain + status
+accuracy (83.3%) is concentrated in three known extractor limitations,
 all still open:
 
 1. **Concern is only detected via a negation word.** Concern expressed

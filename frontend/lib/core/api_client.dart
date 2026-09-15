@@ -164,8 +164,52 @@ class ApiClient {
       final detail = _detailOf(response) ?? 'This feature is pending Supabase configuration.';
       return ApiPending(detail);
     }
+    if (response.statusCode == 422) {
+      return ApiFailure(_validationMessage(response));
+    }
     final detail = _detailOf(response) ?? 'Request failed (${response.statusCode}).';
     return ApiFailure(detail);
+  }
+
+  /// Turns FastAPI's 422 body into something a caregiver can act on.
+  ///
+  /// The raw body is a list of Pydantic error objects; rendering it
+  /// directly put `[{type: string_too_long, loc: [body, text], ...}]` in
+  /// front of the user.
+  String _validationMessage(http.Response response) {
+    const fallback = "That entry couldn't be submitted. Please check what you typed and try again.";
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) return fallback;
+
+      final detail = decoded['detail'];
+      if (detail is String) return detail;
+      if (detail is! List) return fallback;
+
+      final reasons = <String>[];
+      for (final item in detail) {
+        if (item is Map<String, dynamic> && item['msg'] is String) {
+          reasons.add(_humanizeReason(item['msg'] as String));
+        }
+      }
+      if (reasons.isEmpty) return fallback;
+      return "That entry couldn't be submitted: ${reasons.join('; ')}.";
+    } catch (_) {
+      return fallback;
+    }
+  }
+
+  /// Pydantic messages are written for developers ("String should have at
+  /// most 4000 characters"); soften the ones a caregiver can actually hit.
+  String _humanizeReason(String message) {
+    final match = RegExp(r'should have at most (\d+) characters').firstMatch(message);
+    if (match != null) {
+      return 'it is longer than the ${match.group(1)}-character limit';
+    }
+    if (message.contains('should have at least 1 character')) {
+      return 'it is empty';
+    }
+    return message.replaceFirst('String', 'The text');
   }
 
   String? _detailOf(http.Response response) {

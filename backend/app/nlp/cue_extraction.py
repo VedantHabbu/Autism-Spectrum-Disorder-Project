@@ -43,16 +43,33 @@ class BehaviouralEvent:
     confidence: float
 
 
-def _matches(lexicon: DomainLexicon, lemma_text: str, lemma_set: set[str]) -> bool:
+MATCH_PHRASE = "phrase"
+MATCH_SPECIFIC = "specific"
+MATCH_BROAD = "broad"
+
+
+def _match_kind(lexicon: DomainLexicon, lemma_text: str, lemma_set: set[str]) -> str | None:
+    """How specifically this sentence matched the domain, if at all.
+
+    A multi-word phrase or a multi-lemma keyword group names the behaviour
+    precisely. A single-lemma group (a bare verb like "engage" or "talk")
+    is weaker evidence and can be suppressed by the domain's exclusions.
+    """
     if any(phrase in lemma_text for phrase in lexicon.phrases):
-        return True
-    return any(
-        all(keyword in lemma_set for keyword in group) for group in lexicon.keyword_groups
-    )
+        return MATCH_PHRASE
+
+    matched_groups = [
+        group for group in lexicon.keyword_groups if all(kw in lemma_set for kw in group)
+    ]
+    if not matched_groups:
+        return None
+    if any(len(group) > 1 for group in matched_groups):
+        return MATCH_SPECIFIC
+    return MATCH_BROAD
 
 
-def _is_phrase_match(lexicon: DomainLexicon, lemma_text: str) -> bool:
-    return any(phrase in lemma_text for phrase in lexicon.phrases)
+def _is_suppressed(lexicon: DomainLexicon, kind: str, lemma_text: str) -> bool:
+    return kind == MATCH_BROAD and any(excl in lemma_text for excl in lexicon.exclusions)
 
 
 def _has_hedge(lemma_text: str) -> bool:
@@ -80,7 +97,8 @@ def _events_for_sentence(sentence: Span) -> list[BehaviouralEvent]:
 
     events: list[BehaviouralEvent] = []
     for lexicon in DOMAIN_LEXICON:
-        if not _matches(lexicon, lemma_text, lemma_set):
+        kind = _match_kind(lexicon, lemma_text, lemma_set)
+        if kind is None or _is_suppressed(lexicon, kind, lemma_text):
             continue
 
         if lexicon.polarity == "typical_when_present":
@@ -96,9 +114,7 @@ def _events_for_sentence(sentence: Span) -> list[BehaviouralEvent]:
                 status=status,
                 negation_detected=negated,
                 evidence=evidence,
-                confidence=_score(
-                    negated_structurally, _is_phrase_match(lexicon, lemma_text), hedged
-                ),
+                confidence=_score(negated_structurally, kind == MATCH_PHRASE, hedged),
             )
         )
     return events

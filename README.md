@@ -40,7 +40,7 @@ Implemented:
 
 - Mentor-plan-aligned requirements, architecture, API, database, taxonomy, and data/EDA documentation.
 - FastAPI service: `GET /health` and `POST /api/v1/analyze-observation` are fully working (no persistence required). The auth, child-profile, observation-period, observation-storage/history, and guided-observation endpoints have their full request/response contract, validation, and routing implemented, but return `503` until Supabase/PostgreSQL is configured — see `app/core/persistence.py` and [docs/api-contract.md](docs/api-contract.md). No SQLite or in-memory substitute was built for these, by explicit project decision.
-- `backend/app/nlp/`: spaCy-based preprocessing, negation detection, and a per-domain lexicon-based behavioural cue extractor. Self-check against the synthetic dataset: 89.3% domain recall, 79.0% domain+status accuracy (`backend/ml/evaluate_cue_extraction.py`); see [docs/nlp-pipeline.md](docs/nlp-pipeline.md) for the known limitations behind the remaining gap.
+- `backend/app/nlp/`: spaCy-based preprocessing, negation detection, and a per-domain lexicon-based behavioural cue extractor. Self-check against the synthetic dataset: 93.7% domain recall, 83.3% domain+status accuracy (`backend/ml/evaluate_cue_extraction.py`); see [docs/nlp-pipeline.md](docs/nlp-pipeline.md) for the known limitations behind the remaining gap.
 - `backend/ml/`: sourced the public toddler ASD screening (Q-CHAT-10) dataset, documented EDA, trained a structured-data baseline (Logistic Regression + SVM) before any NLP model, and built a synthetic caregiver-narrative pipeline (generation → validation → leakage-safe train/val/test split) — see [docs/dataset-and-eda.md](docs/dataset-and-eda.md).
 - Flutter app: account (sign-up/log-in), child profile, observation period, free-text observation (calls the working NLP-analysis endpoint and displays results), guided observation, and observation history screens. Screens for endpoints still pending Supabase show a clear "pending" banner rather than failing silently or faking data.
 - Git repository initialization and ignore rules.
@@ -58,8 +58,11 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python3 -m spacy download en_core_web_sm
+cp .env.example .env          # optional: local config overrides
 uvicorn app.main:app --reload
 ```
+
+`backend/.env` is loaded automatically at startup and is gitignored; real environment variables take precedence over it. `backend/.env.example` is the committed template and must not contain real secrets.
 
 Open <http://127.0.0.1:8000/health> for the health response and <http://127.0.0.1:8000/docs> for Swagger UI. See [backend/ml/README.md](backend/ml/README.md) for the separate dataset/ML tooling setup (`requirements-ml.txt`).
 

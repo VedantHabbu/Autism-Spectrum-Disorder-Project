@@ -75,6 +75,65 @@ def test_confidence_is_bounded() -> None:
             assert 0.0 <= event.confidence <= 1.0
 
 
+def _domains(text: str) -> set[str]:
+    return {event.domain for event in extract_events(text)}
+
+
+# --- Overly broad single-word triggers (regression) -------------------------
+# A bare verb that is incidental to another domain's activity must not claim
+# a domain of its own.
+
+
+def test_engage_in_pretend_play_does_not_trigger_social_interaction() -> None:
+    domains = _domains("My toddler doesn't engage in pretend play at all.")
+
+    assert "play_pretend_play" in domains
+    assert "social_interaction" not in domains
+
+
+def test_engage_in_imaginative_play_does_not_trigger_social_interaction() -> None:
+    # Same rule as pretend play, different wording.
+    domains = _domains("My toddler engages in imaginative play regularly.")
+
+    assert "play_pretend_play" in domains
+    assert "social_interaction" not in domains
+
+
+def test_talk_on_a_toy_phone_does_not_trigger_communication_language() -> None:
+    domains = _domains("She pretends to talk on a toy phone and cares for her dolls.")
+
+    assert "play_pretend_play" in domains
+    assert "communication_language" not in domains
+
+
+def test_bare_talk_still_matches_ordinary_language_observations() -> None:
+    # Guard against over-suppression: the exclusion is scoped to toy-phone
+    # pretend play, not to the word "talk" in general.
+    assert "communication_language" in _domains("He doesn't talk yet.")
+
+
+def test_engage_with_people_still_matches_even_alongside_pretend_play() -> None:
+    # "engage with" is specific enough to survive the pretend-play exclusion.
+    assert "social_interaction" in _domains("He engages with other kids during pretend play.")
+
+
+# --- Lexicon/phrase gaps (regression) --------------------------------------
+
+
+def test_blank_staring_wording_is_recognized() -> None:
+    assert "sensory_behaviour" in _domains("She doesn't have blank staring episodes.")
+
+
+def test_existing_staring_wording_still_recognized() -> None:
+    assert "sensory_behaviour" in _domains("He stares at nothing for long periods.")
+
+
+def test_reacting_to_an_upset_family_member_is_social_interaction() -> None:
+    assert "social_interaction" in _domains(
+        "My toddler doesn't react when a family member is upset."
+    )
+
+
 def test_is_negated_true_for_contraction() -> None:
     doc = analyze("He doesn't look at me.")
     sentence = next(doc.sents)

@@ -36,6 +36,15 @@ class DomainLexicon:
     polarity: str  # "typical_when_present" | "concern_when_present"
     phrases: tuple[str, ...] = field(default_factory=tuple)
     keyword_groups: tuple[tuple[str, ...], ...] = field(default_factory=tuple)
+    # Phrases that suppress a match found *only* through a single-lemma
+    # keyword group. A bare verb like "engage" or "talk" is ambiguous: it
+    # names this domain's behaviour in "engages with other kids", but is
+    # incidental in "engages in pretend play", where the sentence is
+    # describing a different domain's activity. A multi-word phrase or a
+    # multi-lemma group is specific enough to stand on its own and is never
+    # suppressed — so "engages with other kids during pretend play" still
+    # matches social_interaction. See cue_extraction._match_kind.
+    exclusions: tuple[str, ...] = field(default_factory=tuple)
 
 
 DOMAIN_LEXICON: tuple[DomainLexicon, ...] = (
@@ -86,7 +95,14 @@ DOMAIN_LEXICON: tuple[DomainLexicon, ...] = (
             ("smile",),
             ("interact",),
             ("engage",),
+            # Specific enough to survive the pretend-play exclusion below.
+            ("engage", "with"),
+            ("interact", "with"),
+            # "doesn't react when a family member is upset" — reacting to
+            # someone else's distress is a social-interaction observation.
+            ("react", "upset"),
         ),
+        exclusions=("pretend play", "imaginative play"),
     ),
     DomainLexicon(
         domain="communication_language",
@@ -98,6 +114,10 @@ DOMAIN_LEXICON: tuple[DomainLexicon, ...] = (
             ("speak",),
             ("babble",),
         ),
+        # "talks on a toy phone" is pretend play, not a language observation.
+        # Bare "talk"/"speak" are kept so ordinary phrasings like "he doesn't
+        # talk yet" still match.
+        exclusions=("toy phone",),
     ),
     DomainLexicon(
         domain="play_pretend_play",
@@ -136,6 +156,10 @@ DOMAIN_LEXICON: tuple[DomainLexicon, ...] = (
             "star at nothing",
             "stare blankly",
             "star blankly",
+            # "blank staring episodes" — same behaviour, different word order,
+            # and "staring" here lemmatizes to the noun "star" (see above).
+            "blank stare",
+            "blank star",
             "sensitive to loud noise",
             "sensitive to texture",
             "zone out",
