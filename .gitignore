@@ -30,6 +30,19 @@ frontend/coverage/
 .DS_Store
 Thumbs.db
 
+# Node tooling (the Supabase CLI is installed as a local devDependency;
+# package.json/package-lock.json ARE committed so the CLI version is pinned)
+node_modules/
+
+# Supabase local state. config.toml and migrations/ are committed so the
+# database is reproducible from the repository; everything below holds
+# machine-local state or credentials and must never be committed.
+supabase/.temp/
+supabase/.branches/
+supabase/.env
+supabase/.env.*
+!supabase/.env.example
+
 # Local data and generated reports
 data/raw/
 data/processed/
