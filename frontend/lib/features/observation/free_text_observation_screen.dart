@@ -32,7 +32,11 @@ class _FreeTextObservationScreenState extends State<FreeTextObservationScreen> {
   late final ApiClient _apiClient = widget.apiClient ?? ApiClient();
 
   ObservationContext? _context;
-  DateTime? _observedAt;
+  /// When the caregiver started writing this observation. Captured at entry
+  /// time, not at analyze time, so an observation that is edited and then
+  /// saved still carries when it was actually recorded — and so saving
+  /// without analyzing still has a timestamp.
+  DateTime? _enteredAt;
   bool _analyzing = false;
   bool _saving = false;
   ApiOutcome<ObservationAnalysisResult>? _analysisOutcome;
@@ -46,6 +50,11 @@ class _FreeTextObservationScreenState extends State<FreeTextObservationScreen> {
     super.dispose();
   }
 
+  void _onTextChanged(String value) {
+    if (_enteredAt != null || value.trim().isEmpty) return;
+    setState(() => _enteredAt = DateTime.now());
+  }
+
   Future<void> _analyze() async {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
@@ -54,7 +63,6 @@ class _FreeTextObservationScreenState extends State<FreeTextObservationScreen> {
       _analyzing = true;
       _analysisOutcome = null;
       _saveOutcome = null;
-      _observedAt = DateTime.now(); // automatic timestamp
     });
 
     final outcome = await _apiClient.analyzeObservation(text);
@@ -81,7 +89,7 @@ class _FreeTextObservationScreenState extends State<FreeTextObservationScreen> {
       observationPeriodId: _periodIdController.text.trim(),
       text: text,
       context: _context?.apiValue,
-      observedAt: _observedAt,
+      observedAt: _enteredAt ?? DateTime.now(),
     );
 
     if (mounted) {
@@ -107,6 +115,7 @@ class _FreeTextObservationScreenState extends State<FreeTextObservationScreen> {
             // Matches ObservationAnalysisRequest's server-side cap, so the
             // limit is visible while typing instead of surfacing as a 422.
             maxLength: observationTextMaxLength,
+            onChanged: _onTextChanged,
             decoration: const InputDecoration(
               labelText: 'What did you observe?',
               hintText: "e.g. He doesn't look towards me when I call his name.",
@@ -125,10 +134,10 @@ class _FreeTextObservationScreenState extends State<FreeTextObservationScreen> {
                 .toList(),
             onChanged: (value) => setState(() => _context = value),
           ),
-          if (_observedAt != null) ...[
+          if (_enteredAt != null) ...[
             const SizedBox(height: 8),
             Text(
-              'Recorded at: $_observedAt',
+              'Recorded at: $_enteredAt',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
@@ -148,43 +157,43 @@ class _FreeTextObservationScreenState extends State<FreeTextObservationScreen> {
           if (_analysisOutcome case ApiFailure(:final message)) ErrorBanner(message: message),
           if (_analysisOutcome case ApiPending(:final message)) PendingBanner(message: message),
           if (_analysisOutcome case ApiSuccess(data: final result)) _AnalysisResultView(result: result),
-          if (_analysisOutcome != null) ...[
-            const Divider(height: 32),
-            Text('Save to observation history', style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _childIdController,
-              decoration: const InputDecoration(
-                labelText: 'Child ID',
-                helperText: 'Generated locally — child creation is pending Supabase.',
-                border: OutlineInputBorder(),
-              ),
+          // Saving is independent of analysis: an observation is a record in
+          // its own right, and the plan stores it before interpreting it.
+          const Divider(height: 32),
+          Text('Save to observation history', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _childIdController,
+            decoration: const InputDecoration(
+              labelText: 'Child ID',
+              helperText: 'Generated locally — child creation is pending Supabase.',
+              border: OutlineInputBorder(),
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _periodIdController,
-              decoration: const InputDecoration(
-                labelText: 'Observation period ID',
-                helperText: 'Generated locally — period creation is pending Supabase.',
-                border: OutlineInputBorder(),
-              ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _periodIdController,
+            decoration: const InputDecoration(
+              labelText: 'Observation period ID',
+              helperText: 'Generated locally — period creation is pending Supabase.',
+              border: OutlineInputBorder(),
             ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: _saving ? null : _save,
-              icon: _saving
-                  ? const SizedBox(
-                      height: 16,
-                      width: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.save_outlined),
-              label: const Text('Save observation'),
-            ),
-            const SizedBox(height: 8),
-            if (_saveOutcome case ApiPending(:final message)) PendingBanner(message: message),
-            if (_saveOutcome case ApiFailure(:final message)) ErrorBanner(message: message),
-          ],
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _saving ? null : _save,
+            icon: _saving
+                ? const SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.save_outlined),
+            label: const Text('Save observation'),
+          ),
+          const SizedBox(height: 8),
+          if (_saveOutcome case ApiPending(:final message)) PendingBanner(message: message),
+          if (_saveOutcome case ApiFailure(:final message)) ErrorBanner(message: message),
         ],
       ),
     );

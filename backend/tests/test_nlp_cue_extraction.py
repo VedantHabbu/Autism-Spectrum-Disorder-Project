@@ -1,5 +1,5 @@
 from app.nlp.cue_extraction import extract_events
-from app.nlp.negation import is_negated
+from app.nlp.negation import is_negated, signal_scope
 from app.nlp.preprocessing import analyze
 
 
@@ -132,6 +132,120 @@ def test_reacting_to_an_upset_family_member_is_social_interaction() -> None:
     assert "social_interaction" in _domains(
         "My toddler doesn't react when a family member is upset."
     )
+
+
+def _status(text: str, domain: str) -> str:
+    events = [event for event in extract_events(text) if event.domain == domain]
+    return events[0].status if events else "NO EVENT"
+
+
+# --- Status model: concern without a negation word (regression) -------------
+# Previously status was decided purely by "is there a negation", so concern
+# expressed lexically read as typical.
+
+
+def test_difficulty_phrasing_is_a_concern_without_any_negation() -> None:
+    assert _status("It's hard to get her to make eye contact", "eye_contact") == "concern"
+
+
+def test_developmental_delay_phrasing_is_a_concern() -> None:
+    assert _status("His language development seems behind.", "communication_language") == "concern"
+
+
+def test_negative_frequency_is_a_concern() -> None:
+    assert _status("He rarely looks me in the eye.", "eye_contact") == "concern"
+
+
+# --- Status model: a negated difficulty cancels back to typical -------------
+# "without"/"no"/"never" used to invert an unrelated positive statement.
+
+
+def test_without_trouble_is_typical() -> None:
+    assert _status("holds eye contact without trouble", "eye_contact") == "typical"
+
+
+def test_no_problem_is_typical() -> None:
+    assert _status("He has no problem making eye contact.", "eye_contact") == "typical"
+
+
+def test_never_has_trouble_is_typical() -> None:
+    assert (
+        _status("He never has trouble responding when I call his name.", "response_to_name")
+        == "typical"
+    )
+
+
+# --- Clause scoping (regression) -------------------------------------------
+
+
+def test_negation_does_not_reach_a_later_clause_with_its_own_subject() -> None:
+    # "he does flap" is its own clause, so the earlier "doesn't" must not
+    # make the flapping read as typical.
+    assert (
+        _status("doesn't line up his toys, but he does flap his hands", "repetitive_behaviour")
+        == "concern"
+    )
+
+
+def test_negation_is_shared_by_a_coordinated_verb_without_its_own_subject() -> None:
+    # "or flap his hands" has no subject of its own, so it stays inside the
+    # scope of "doesn't".
+    assert (
+        _status("He doesn't line up his toys or flap his hands.", "repetitive_behaviour")
+        == "typical"
+    )
+
+
+def test_negation_attached_under_an_auxiliary_is_still_found() -> None:
+    # The parser reads "blank" as the root verb here, pushing "does n't"
+    # below the anchor rather than above it.
+    assert (
+        _status("She doesn't have blank staring episodes.", "sensory_behaviour") == "typical"
+    )
+
+
+# --- Hedges (regression) ----------------------------------------------------
+
+
+def test_frequency_qualifier_does_not_erase_a_concern() -> None:
+    assert (
+        _status("Sometimes he doesn't respond to his name", "response_to_name") == "concern"
+    )
+
+
+def test_frequency_qualifier_still_softens_an_otherwise_typical_observation() -> None:
+    assert _status("Sometimes she makes eye contact with me.", "eye_contact") == "uncertain"
+
+
+def test_epistemic_hedge_marks_uncertain() -> None:
+    assert _status("I'm not sure whether he makes eye contact.", "eye_contact") == "uncertain"
+
+
+# --- Vocabulary regressions -------------------------------------------------
+
+
+def test_showing_concern_for_others_is_not_itself_a_concern() -> None:
+    # "concern" as a caring behaviour must not be read as a deficit marker.
+    assert (
+        _status("My toddler shows concern and tries to comfort us.", "social_interaction")
+        == "typical"
+    )
+
+
+def test_sharing_interesting_things_is_joint_attention() -> None:
+    assert (
+        _status("My toddler doesn't try to share interesting things with me.", "joint_attention")
+        == "concern"
+    )
+
+
+def test_signal_scope_terminates_at_root() -> None:
+    # Guards the walk's ROOT check: spaCy returns a fresh Token wrapper on
+    # every .head access, so an identity comparison never terminates.
+    doc = analyze("He makes eye contact.")
+    root = [token for token in doc if token.dep_ == "ROOT"][0]
+    scope = signal_scope(root)
+    assert root.i in {token.i for token in scope}
 
 
 def test_is_negated_true_for_contraction() -> None:

@@ -16,12 +16,24 @@ Week 4/6 (not started, per project scope for this phase).
    sentence-segments the observation text, and exposes a lemmatized,
    lowercased representation of each sentence. Negation words are
    preserved (never stripped) since `negation.py` depends on them.
-2. **`negation.py`** — flags a sentence as negated if spaCy's dependency
-   parse tags any token `neg` (e.g. the "n't" in "doesn't"), or a
-   negation-cue word ("never", "without", "lack", ...) appears. This is a
-   **sentence-level** signal: a compound sentence with one negated and one
-   affirmed clause will mark both — a known limitation, left for Week 9
-   robustness work rather than solved now.
+2. **`negation.py`** — works at **clause level**, not sentence level.
+   `signal_scope(trigger)` walks up from a matched trigger through its
+   ancestors, collecting each ancestor and that ancestor's *direct*
+   children (plus one extra level through `prep`/`aux` children, where
+   negation and prepositional objects hang). Two rules make this precise:
+
+   - The walk **stops at a coordinated clause that has its own subject**.
+     That is the difference between "doesn't line up his toys **or flap
+     his hands**" (no subject of its own → shares the negation → typical)
+     and "doesn't line up his toys, **but he does flap his hands**" (its
+     own subject → the earlier negation does not reach it → concern).
+   - Collecting *direct children* rather than whole subtrees means a
+     sibling clause's negation is never picked up.
+
+   `polarity_of()` then reports two independent signals for that scope:
+   whether it is **negated**, and whether a **concern marker** is present
+   (a lexical difficulty/deficit word — "hard", "trouble", "rarely",
+   "behind", "struggles").
 3. **`lexicon.py`** — for each of the 10 behavioural-taxonomy domains,
    defines fixed trigger phrases and/or keyword groups (lemma sets that
    must all co-occur in a sentence). Each domain is tagged with whether
@@ -33,8 +45,35 @@ Week 4/6 (not started, per project scope for this phase).
    `domain`, `status` (`typical` / `concern` / `uncertain`),
    `negation_detected`, `evidence` (the matched sentence, verbatim from
    the caregiver's text), and a heuristic `confidence` in `[0, 1]`.
-   `status` becomes `uncertain` when a hedge cue ("sometimes", "not sure",
-   "maybe", ...) is present, overriding the negation-derived status.
+
+   For a domain whose behaviour is *expected* (`typical_when_present`),
+   status is **concern when exactly one of negation / concern-marker
+   holds**. Both together cancel, which is what makes these read
+   correctly:
+
+   | Caregiver text | negated | marker | status |
+   | --- | --- | --- | --- |
+   | "doesn't make eye contact" | ✓ | — | concern |
+   | "it's hard to get eye contact" | — | ✓ | concern |
+   | "holds eye contact **without trouble**" | ✓ | ✓ | typical |
+   | "has **no problem** making eye contact" | ✓ | ✓ | typical |
+   | "makes eye contact easily" | — | — | typical |
+
+   For a `concern_when_present` domain (e.g. repetitive behaviour) only
+   negation matters — the trigger itself is the concern.
+
+   Status is decided **per trigger occurrence** and aggregated per domain
+   with **concern taking precedence**, so a sentence reporting one typical
+   and one concerning behaviour surfaces the concern.
+
+5. **Hedges** are split by what they actually qualify:
+   - **Epistemic** ("not sure", "hard to tell", "maybe") — the caregiver
+     is unsure *what they saw*. This outranks everything → `uncertain`.
+   - **Frequency** ("sometimes", "occasionally") — the caregiver is sure,
+     but it happens only some of the time. This **never erases a
+     concern**: "sometimes he doesn't respond to his name" stays
+     `concern`, while "sometimes she makes eye contact" (otherwise
+     typical) softens to `uncertain`.
 
 `confidence` is an engineering heuristic (base score + bonuses for an
 exact phrase match / a structurally-detected negation, penalty for a
@@ -55,13 +94,20 @@ from "absent/reduced") is a guided-observation-only concept; see
 synthetic narrative dataset and checks whether the extractor recovers each
 row's known (domain, status). Latest run:
 
-| Metric | Result | After context-template fix | Before both fixes |
-| --- | --- | --- | --- |
-| Domain recall | 93.7% | 89.3% | 89.3% |
-| Domain + status accuracy | 83.3% | 79.0% | 74.3% |
-| No event extracted | 4.0% | 8.3% | 8.3% |
+| Metric | Result | Before status-model rework | Before lexicon scoping | Original |
+| --- | --- | --- | --- | --- |
+| Domain recall | 93.7% | 93.7% | 89.3% | 89.3% |
+| Domain + status accuracy | **92.0%** | 83.3% | 79.0% | 74.3% |
+| No event extracted | 4.0% | 4.0% | 8.3% | 8.3% |
 
-The latest column reflects two lexicon fixes: scoping overly broad
+The latest column reflects the clause-scoped status model described
+above (concern markers, polarity cancellation, clause-level negation,
+and hedges split by what they qualify). Domain recall and the no-event
+rate are unchanged by that work, as expected — it changes how status is
+decided, not what matches.
+
+The "Before status-model rework" column reflects two earlier lexicon
+fixes: scoping overly broad
 single-lemma triggers (a bare "engage"/"talk" no longer claims a domain
 when the sentence is describing another domain's activity, e.g. "engages
 in pretend play", "talks on a toy phone"), and filling phrase gaps that
@@ -70,7 +116,7 @@ a family member is upset"). Multi-word phrases and multi-lemma groups are
 never suppressed, so "engages with other kids during pretend play" still
 matches social_interaction.
 
-The "before" column reflects a defect in the narrative templates, not in
+The "Original" column reflects a defect in the narrative templates, not in
 the extractor: the `with_unfamiliar_people` context filler used to read
 " around people he doesn't know", and that "doesn't" was picked up by
 sentence-level negation detection, flipping the extracted status of
@@ -78,10 +124,8 @@ otherwise-positive narratives in 14.3% of rows. The filler is now
 " around unfamiliar people" and carries no behavioural claim of its own
 (regression test: `test_context_phrases_introduce_no_negation`).
 
-Note that domain recall is unchanged — the filler never affected domain
-matching — and that a few `concern` rows got *worse*: the injected
-"doesn't" had been making the extractor output `concern` for the wrong
-reason, masking the real limitation below.
+Note that the context-filler fix never affected domain matching, only
+status.
 
 These numbers describe a template-generated dataset built from the same
 kind of literal phrasing the lexicon targets, so they should not be read
@@ -90,16 +134,19 @@ typos, and paraphrase robustness are explicitly Week 9 work, not
 attempted here.
 
 The remaining gap between domain recall (93.7%) and domain + status
-accuracy (83.3%) is concentrated in three known extractor limitations,
-all still open:
+accuracy (92.0%) is no longer dominated by the status model. What is
+still open:
 
-1. **Concern is only detected via a negation word.** Concern expressed
-   lexically reads as `typical` — e.g. "It's hard to get her to make eye
-   contact with me", "language development seems behind".
-2. **Negation cues fire regardless of what they negate.** "holds eye
-   contact without trouble" reads as `concern` because of "without".
-3. **Sentence-level negation scoping** (described above), e.g. "episodes
-   of staring blankly that don't seem tied to anything".
+1. **Subject attribution.** "He rarely looks me in the eye, even when I'm
+   talking directly to him" still raises a `communication_language`
+   event: the extractor cannot tell that the *parent*, not the child, is
+   the one talking. This needs the trigger bound to its subject.
+2. **Parser dependence.** Scoping is only as good as spaCy's parse. The
+   small English model mis-tags "blank" as a verb in "doesn't have blank
+   staring episodes"; the scope walk compensates by expanding through
+   `aux` children, but other mis-parses will mis-scope.
+3. **Robustness to real caregiver writing** — typos, informal language,
+   and paraphrase are explicitly Week 9 work and are not attempted here.
 
 ## API endpoint
 

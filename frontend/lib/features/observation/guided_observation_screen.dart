@@ -5,6 +5,7 @@ import '../../core/api_outcome.dart';
 import '../../core/uuid.dart';
 import '../../models/behavioural_domain.dart';
 import '../../models/guided_observation_choice.dart';
+import '../../models/observation_context.dart';
 import '../../widgets/disclaimer_banner.dart';
 import '../../widgets/pending_banner.dart';
 
@@ -25,6 +26,11 @@ class _GuidedObservationScreenState extends State<GuidedObservationScreen> {
   final _childIdController = TextEditingController(text: generateUuidV4());
   final _periodIdController = TextEditingController(text: generateUuidV4());
   late final ApiClient _apiClient = widget.apiClient ?? ApiClient();
+
+  /// Setting these prompts were answered in. Applies to every submission
+  /// from this screen, since a guided round is normally completed in one
+  /// sitting; the backend stores it per observation.
+  ObservationContext? _context;
 
   final Map<BehaviouralDomain, GuidedObservationChoice?> _choices = {
     for (final domain in BehaviouralDomain.values) domain: null,
@@ -61,6 +67,7 @@ class _GuidedObservationScreenState extends State<GuidedObservationScreen> {
       domain: domain.apiValue,
       choice: choice.apiValue,
       note: _noteControllers[domain]!.text.trim(),
+      context: _context?.apiValue,
     );
 
     if (mounted) {
@@ -96,6 +103,19 @@ class _GuidedObservationScreenState extends State<GuidedObservationScreen> {
               helperText: 'Generated locally — period creation is pending Supabase.',
               border: OutlineInputBorder(),
             ),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<ObservationContext>(
+            initialValue: _context,
+            decoration: const InputDecoration(
+              labelText: 'Context (optional)',
+              helperText: 'Applied to each answer you submit below.',
+              border: OutlineInputBorder(),
+            ),
+            items: ObservationContext.values
+                .map((c) => DropdownMenuItem(value: c, child: Text(c.label)))
+                .toList(),
+            onChanged: (value) => setState(() => _context = value),
           ),
           const SizedBox(height: 16),
           for (final domain in BehaviouralDomain.values) _DomainPrompt(

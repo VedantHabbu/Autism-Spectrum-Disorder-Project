@@ -14,9 +14,28 @@ from spacy.language import Language
 from spacy.tokens import Doc, Span
 
 
+SPACY_MODEL = "en_core_web_sm"
+
+MODEL_MISSING_MESSAGE = (
+    f"The spaCy model '{SPACY_MODEL}' is not installed, but it is a required "
+    "dependency of this service. Install it with:\n"
+    "    pip install -r requirements.txt\n"
+    f"or directly:  python -m spacy download {SPACY_MODEL}"
+)
+
+
 @lru_cache(maxsize=1)
 def get_pipeline() -> Language:
-    return spacy.load("en_core_web_sm")
+    """Load the spaCy pipeline, or fail with an actionable message.
+
+    Called during application startup (app/main.py) so a missing model
+    stops the service immediately instead of letting it start and then
+    return a 500 on the first /analyze-observation request.
+    """
+    try:
+        return spacy.load(SPACY_MODEL)
+    except OSError as exc:  # model not installed
+        raise RuntimeError(MODEL_MISSING_MESSAGE) from exc
 
 
 def analyze(text: str) -> Doc:

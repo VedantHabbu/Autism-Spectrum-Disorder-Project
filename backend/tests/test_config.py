@@ -66,6 +66,41 @@ def test_dotenv_example_is_not_git_ignored() -> None:
     assert not _git_check_ignore(BACKEND_DIR / ".env.example")
 
 
+def test_startup_fails_fast_when_the_spacy_model_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A fresh environment must not start and then 500 on first use.
+
+    Regression: the model was previously only a documented
+    `python -m spacy download` step, so `pip install -r requirements.txt`
+    produced a service that booted fine and failed with OSError on the
+    first /analyze-observation request.
+    """
+    import spacy
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+    from app.nlp.preprocessing import get_pipeline
+
+    def missing_model(name, *args, **kwargs):
+        raise OSError(f"[E050] Can't find model '{name}'")
+
+    monkeypatch.setattr(spacy, "load", missing_model)
+    get_pipeline.cache_clear()
+    try:
+        with pytest.raises(RuntimeError, match="not installed"):
+            with TestClient(app):
+                pass
+    finally:
+        monkeypatch.undo()
+        get_pipeline.cache_clear()
+
+
+def test_spacy_model_is_a_declared_dependency() -> None:
+    requirements = (BACKEND_DIR / "requirements.txt").read_text()
+    assert "en_core_web_sm" in requirements
+
+
 def test_dotenv_example_contains_no_real_secrets() -> None:
     contents = (BACKEND_DIR / ".env.example").read_text().lower()
     for marker in ("password=", "secret=", "api_key=", "service_role", "supabase_key"):

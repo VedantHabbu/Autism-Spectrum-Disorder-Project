@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/api_client.dart';
 import '../../core/api_outcome.dart';
 import '../../core/uuid.dart';
+import '../../models/observation.dart';
 import '../../widgets/pending_banner.dart';
 
 /// Chronological observation history for a child (docs/requirements.md).
@@ -84,8 +85,10 @@ class _ObservationHistoryScreenState extends State<ObservationHistoryScreen> {
                     ? const Center(child: Text('No observations recorded yet.'))
                     : ListView.builder(
                         itemCount: items.length,
-                        itemBuilder: (context, index) => Card(
-                          child: ListTile(title: Text(items[index].toString())),
+                        itemBuilder: (context, index) => _ObservationTile(
+                          observation: Observation.fromJson(
+                            items[index] as Map<String, dynamic>,
+                          ),
                         ),
                       ),
               ),
@@ -93,5 +96,66 @@ class _ObservationHistoryScreenState extends State<ObservationHistoryScreen> {
         ),
       ),
     );
+  }
+}
+
+/// One observation rendered as structured fields (entry type, context,
+/// timestamp, original text) rather than a raw map dump.
+class _ObservationTile extends StatelessWidget {
+  const _ObservationTile({required this.observation});
+
+  final Observation observation;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final text = observation.text;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Chip(
+                  label: Text(observation.sourceLabel),
+                  visualDensity: VisualDensity.compact,
+                ),
+                const SizedBox(width: 8),
+                if (observation.context != null)
+                  Chip(
+                    label: Text(observation.context!.label),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                const Spacer(),
+                Text(
+                  _formatTimestamp(observation.observedAt),
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              (text == null || text.isEmpty)
+                  ? 'No free-text note for this entry.'
+                  : text,
+              style: (text == null || text.isEmpty)
+                  ? theme.textTheme.bodyMedium?.copyWith(fontStyle: FontStyle.italic)
+                  : theme.textTheme.bodyMedium,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _formatTimestamp(DateTime value) {
+    final local = value.toLocal();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${local.year}-${two(local.month)}-${two(local.day)} '
+        '${two(local.hour)}:${two(local.minute)}';
   }
 }

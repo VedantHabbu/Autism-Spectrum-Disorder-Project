@@ -8,6 +8,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
+/// The screen scrolls; off-screen controls are never built, so give the
+/// test a tall surface rather than scrolling to reach the save controls.
+void useTallSurface(WidgetTester tester) {
+  tester.view.physicalSize = const Size(1200, 5000);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+}
+
 void main() {
   testWidgets('analyzing text displays the returned behavioural events', (tester) async {
     final mockClient = MockClient((request) async {
@@ -82,6 +91,74 @@ void main() {
     expect(find.textContaining('4000-character limit'), findsOneWidget);
     expect(find.textContaining('string_too_long'), findsNothing);
     expect(find.textContaining('loc:'), findsNothing);
+  });
+
+  testWidgets('an observation can be saved without running Analyze first', (tester) async {
+    // Regression: the save controls were hidden until an analysis had run,
+    // so a raw observation could not be recorded on its own.
+    Map<String, dynamic>? sentBody;
+    final mockClient = MockClient((request) async {
+      sentBody = jsonDecode(request.body) as Map<String, dynamic>;
+      return http.Response(jsonEncode({'detail': 'pending'}), 503);
+    });
+
+    useTallSurface(tester);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: FreeTextObservationScreen(apiClient: ApiClient(httpClient: mockClient)),
+      ),
+    );
+
+    // Visible immediately, with no Analyze run.
+    expect(find.text('Save observation'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).first, 'He waved goodbye.');
+    await tester.tap(find.text('Save observation'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(sentBody, isNotNull);
+    expect(sentBody!['text'], 'He waved goodbye.');
+  });
+
+  testWidgets('observed_at is captured at entry time, not at analyze time', (tester) async {
+    Map<String, dynamic>? sentBody;
+    final mockClient = MockClient((request) async {
+      if (request.url.path.endsWith('/observations')) {
+        sentBody = jsonDecode(request.body) as Map<String, dynamic>;
+        return http.Response(jsonEncode({'detail': 'pending'}), 503);
+      }
+      return http.Response(jsonEncode({'events': [], 'disclaimer': ''}), 200);
+    });
+
+    useTallSurface(tester);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: FreeTextObservationScreen(apiClient: ApiClient(httpClient: mockClient)),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField).first, 'He waved goodbye.');
+    await tester.pump();
+    final entryTime = DateTime.now();
+
+    // Analyze later; the recorded time must still be the entry time.
+    await tester.pump(const Duration(seconds: 2));
+    await tester.tap(find.text('Analyze'));
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.text('Save observation'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(sentBody, isNotNull);
+    final observedAt = DateTime.parse(sentBody!['observed_at'] as String);
+    expect(
+      observedAt.difference(entryTime).inSeconds.abs() < 2,
+      isTrue,
+      reason: 'observed_at ($observedAt) should be entry time, not analyze time',
+    );
   });
 
   testWidgets('observation field caps input at the backend limit', (tester) async {

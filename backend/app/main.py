@@ -1,15 +1,29 @@
 """FastAPI application entry point."""
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import api_v1_router
 from app.api.routes.health import router as health_router
 from app.core.config import settings
+from app.nlp.preprocessing import get_pipeline
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    # Load the spaCy model up front. Without this the service would start
+    # cleanly on an environment missing the model and only fail later, as a
+    # 500 on the first /analyze-observation call.
+    get_pipeline()
+    yield
+
 
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
+    lifespan=lifespan,
     description=(
         "Backend for an ASD screening-support prototype. This service "
         "does not diagnose ASD."

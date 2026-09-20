@@ -68,7 +68,10 @@ DOMAIN_LEXICON: tuple[DomainLexicon, ...] = (
     DomainLexicon(
         domain="joint_attention",
         polarity="typical_when_present",
-        phrases=("joint attention", "share interest", "point out"),
+        # "share interesting" covers "share interesting things/sights with
+        # me", which "share interest" does not match once phrases are
+        # compared token-by-token rather than as raw substrings.
+        phrases=("joint attention", "share interest", "share interesting", "point out"),
         keyword_groups=(
             ("point", "share"),
             ("follow", "gaze"),
@@ -181,16 +184,73 @@ HEDGE_CUES: tuple[str, ...] = (
     "not certain",
 )
 
-NEGATION_CUES: tuple[str, ...] = (
-    "not",
-    "n't",
-    "no",
-    "never",
-    "hardly",
-    "rarely",
-    "barely",
-    "without",
-    "lack",
-    "lacks",
-    "lacking",
+# The caregiver is unsure *what they observed*. This is genuine uncertainty
+# and outranks any other signal.
+EPISTEMIC_HEDGES: tuple[str, ...] = (
+    "not sure",
+    "unsure",
+    "not certain",
+    "hard to tell",
+    "difficult to tell",
+    "can not tell",
+    "maybe",
+    "possibly",
+    "i think",
+    "seems like",
 )
+
+# The caregiver is sure of the observation but says it happens only some of
+# the time. This qualifies frequency, NOT certainty: it must never erase a
+# concern ("sometimes he doesn't respond to his name" is still a concern).
+FREQUENCY_QUALIFIERS: tuple[str, ...] = (
+    "sometimes",
+    "occasionally",
+    "at times",
+    "now and then",
+)
+
+# True negators: they flip the polarity of whatever they scope over.
+# Deliberately excludes "nothing", which appears as ordinary content in
+# "stares at nothing" rather than negating it.
+NEGATORS: frozenset[str] = frozenset(
+    {"not", "n't", "no", "never", "without", "cannot", "neither"}
+)
+
+# Words that carry the concern themselves, with no negation needed:
+# "it's hard to get eye contact", "rarely looks at me", "language is behind".
+# Negating one of these cancels it back to typical ("without trouble",
+# "no problem", "never has trouble") — see negation.polarity_of.
+CONCERN_MARKERS: frozenset[str] = frozenset(
+    {
+        "hard",
+        "difficult",
+        "difficulty",
+        "trouble",
+        "problem",
+        "struggle",
+        "rarely",
+        "hardly",
+        "barely",
+        "seldom",
+        "behind",
+        "delayed",
+        "delay",
+        "slow",
+        "unable",
+        "inability",
+        "fail",
+        "reluctant",
+        "resist",
+        "avoid",
+        "limited",
+        "poor",
+        "lack",
+        # "concern"/"concerned" are deliberately absent: a child who
+        # "shows concern and tries to comfort us" is displaying the
+        # expected behaviour, not a deficit.
+        "worried",
+        "worry",
+    }
+)
+
+NEGATION_CUES: tuple[str, ...] = tuple(sorted(NEGATORS))
