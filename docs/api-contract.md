@@ -127,6 +127,22 @@ One call will write two linked rows: an `observations` row (`source_type: "guide
 
 **Current behaviour:** `503`.
 
+## Status update: the database now exists
+
+The Supabase database is applied and enforcing RLS (see
+[supabase-integration.md](supabase-integration.md)), but **these FastAPI
+routes still return `503`, now by architectural choice rather than
+absence.** The caregiver client talks to Supabase directly for
+persistence so that RLS is the enforcement boundary, while FastAPI stays
+a stateless NLP service holding no database credential.
+
+The routes are retained as a documented, validated contract: they capture
+the request/response shapes the data layer must satisfy, and they are the
+place to wire server-side persistence later if it is ever needed (by
+forwarding the caregiver's JWT, never a service-role key).
+
+The section below records the original reasoning.
+
 ## Why these routes return 503 instead of using a local database
 
 No Supabase project/credentials exist yet for this student prototype. Rather than build a SQLite or in-memory substitute that would need to be rewritten once Supabase is configured (and could mask persistence-layer bugs behind fake data), every persistence-backed route's request/response contract, validation, and routing is fully implemented and tested (`backend/tests/test_schema_validation.py`, `backend/tests/test_pending_persistence_routes.py`), and the route itself returns a clear `503` via the shared `require_persistence` dependency (`app/core/persistence.py`) until real Supabase/PostgreSQL credentials are wired in. At that point, only the repository/data-access layer needs to be added — no API contract changes.

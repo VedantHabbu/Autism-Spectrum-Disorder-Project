@@ -42,6 +42,18 @@ For a guided entry, the authoritative record is the pair of rows: the caregiver'
 
 Supabase Row-Level Security is planned to restrict each caregiver to authorized child records. Timestamps support traceability; a later audit design will preserve the source observation, interpretation, and generated reports.
 
-## Schema draft
+## Schema draft and applied migrations
 
-See [`../backend/sql/001_initial_schema.sql`](../backend/sql/001_initial_schema.sql) for a non-executed PostgreSQL draft. It intentionally contains no connection settings, credentials, policies, or sample patient data.
+[`../backend/sql/001_initial_schema.sql`](../backend/sql/001_initial_schema.sql) remains the portable plain-PostgreSQL definition of the tables above. It contains no connection settings, credentials, policies, or sample patient data.
+
+**`supabase/migrations/` is now authoritative for the deployed database.** It is applied to the Supabase project and reproducible from the repository:
+
+| Migration | Adds |
+| --- | --- |
+| `0001_initial_schema` | byte-identical copy of `backend/sql/001_initial_schema.sql` |
+| `0002_supabase_constraints` | UUID PK defaults; `caregivers.auth_user_id → auth.users(id)` (`ON DELETE RESTRICT`); five ownership indexes; `updated_at` trigger; `context`/`status` CHECKs; `display_name NOT NULL`; composite FKs binding an observation's (and report's) period to the same child |
+| `0003_auth_caregiver_trigger` | creates the caregiver row on signup |
+| `0004_rls_policies` | RLS on all 7 tables + 18 ownership policies |
+| `0005_grants` / `0006_tighten_authenticated_grants` | Data API grants; removes privileges inherited from Supabase's default ACL |
+
+Access control is described in [supabase-integration.md](supabase-integration.md).

@@ -42,12 +42,16 @@ Implemented:
 - FastAPI service: `GET /health` and `POST /api/v1/analyze-observation` are fully working (no persistence required). The auth, child-profile, observation-period, observation-storage/history, and guided-observation endpoints have their full request/response contract, validation, and routing implemented, but return `503` until Supabase/PostgreSQL is configured — see `app/core/persistence.py` and [docs/api-contract.md](docs/api-contract.md). No SQLite or in-memory substitute was built for these, by explicit project decision.
 - `backend/app/nlp/`: spaCy-based preprocessing, negation detection, and a per-domain lexicon-based behavioural cue extractor. Self-check against the synthetic dataset: 93.7% domain recall, 92.0% domain+status accuracy (`backend/ml/evaluate_cue_extraction.py`); see [docs/nlp-pipeline.md](docs/nlp-pipeline.md) for the known limitations behind the remaining gap.
 - `backend/ml/`: sourced the public toddler ASD screening (Q-CHAT-10) dataset, documented EDA, trained a structured-data baseline (Logistic Regression + SVM) before any NLP model, and built a synthetic caregiver-narrative pipeline (generation → validation → leakage-safe train/val/test split) — see [docs/dataset-and-eda.md](docs/dataset-and-eda.md).
-- Flutter app: account (sign-up/log-in), child profile, observation period, free-text observation (calls the working NLP-analysis endpoint and displays results), guided observation, and observation history screens. Screens for endpoints still pending Supabase show a clear "pending" banner rather than failing silently or faking data.
+- Flutter app: account (sign-up/log-in), child profile, observation period, free-text observation (calls the working NLP-analysis endpoint and displays results), guided observation, and observation history screens. Screens whose backend persistence is not yet wired show a clear "pending" banner rather than failing silently or faking data.
+- **Supabase database**: all 7 tables, Row-Level Security on every table, 18 ownership policies, Data API grants, and a signup trigger creating the caregiver row — applied from `supabase/migrations/` and verified against the live Data API with two real users (43/44 assertions; the one failure was a test-harness counting bug, not a policy problem). See [docs/supabase-integration.md](docs/supabase-integration.md).
 - Git repository initialization and ignore rules.
+
+Outstanding before Weeks 2–3 can be called complete:
+
+- **The Flutter client is not yet connected to Supabase.** The database is live and enforcing RLS, but the app still calls the FastAPI persistence routes, which return `503` by design. Sign-up/login, child profiles, observation periods, observation storage, guided-observation submission, and history therefore do not function in the running app yet.
 
 Planned, not implemented:
 
-- Supabase connection, Row-Level Security, real authentication and persistence.
 - TF-IDF/embedding-based NLP model training (Week 4+), longitudinal aggregation, explainability, LLM-based report generation, dashboards.
 
 ## Run the backend
