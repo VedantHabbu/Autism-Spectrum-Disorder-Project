@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../core/api_client.dart';
+import '../../core/auth_service.dart';
 import '../../widgets/disclaimer_banner.dart';
-import '../auth/auth_screen.dart';
 import '../child_profile/child_profile_screen.dart';
 import '../observation/free_text_observation_screen.dart';
 import '../observation/guided_observation_screen.dart';
@@ -11,14 +11,17 @@ import '../observation_period/observation_period_screen.dart';
 
 /// App home / navigation shell.
 ///
-/// Checks backend connectivity on load (Flutter -> FastAPI /health) as the
-/// first end-to-end connection, then links to each caregiver workflow
-/// screen. Screens beyond free-text analysis depend on persistence that is
-/// still pending Supabase configuration (docs/api-contract.md).
+/// Checks backend connectivity on load (Flutter -> FastAPI /health), then
+/// links to each caregiver workflow screen. Reached only once the
+/// caregiver is signed in (see AuthGate); sign-out is in the app bar.
+/// Screens beyond free-text analysis are not yet wired to Supabase.
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, this.apiClient});
+  const HomeScreen({super.key, this.apiClient, this.authService});
 
   final ApiClient? apiClient;
+
+  /// Present once the caregiver is signed in; enables sign-out.
+  final AuthService? authService;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -44,7 +47,19 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('ASD Screening Support')),
+      appBar: AppBar(
+        title: const Text('ASD Screening Support'),
+        actions: [
+          if (widget.authService != null)
+            IconButton(
+              icon: const Icon(Icons.logout),
+              tooltip: widget.authService!.currentEmail == null
+                  ? 'Sign out'
+                  : 'Sign out (${widget.authService!.currentEmail})',
+              onPressed: () => widget.authService!.signOut(),
+            ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -52,12 +67,6 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 12),
           _BackendStatusTile(reachable: _backendReachable, onRetry: _checkBackend),
           const SizedBox(height: 16),
-          _NavigationTile(
-            icon: Icons.person_outline,
-            title: 'Caregiver account',
-            subtitle: 'Sign up or log in',
-            onTap: () => _push(const AuthScreen()),
-          ),
           _NavigationTile(
             icon: Icons.child_care,
             title: 'Child profile',

@@ -8,6 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
+import 'support/fake_auth_service.dart';
+
 void main() {
   testWidgets('renders the app home screen with the safety disclaimer', (tester) async {
     final mockClient = MockClient((request) async {
@@ -37,8 +39,14 @@ void main() {
   testWidgets('app entry point builds ScreeningSupportApp', (tester) async {
     final mockClient = MockClient((request) async => http.Response('', 500));
 
+    final auth = FakeAuthService(signedIn: true, email: 'caregiver@example.test');
+    addTearDown(auth.dispose);
+
     await tester.pumpWidget(
-      ScreeningSupportApp(apiClient: ApiClient(httpClient: mockClient)),
+      ScreeningSupportApp(
+        apiClient: ApiClient(httpClient: mockClient),
+        authService: auth,
+      ),
     );
     await tester.pump();
 

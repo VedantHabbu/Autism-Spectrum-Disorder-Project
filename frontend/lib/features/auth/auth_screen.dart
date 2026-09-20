@@ -1,19 +1,20 @@
 import 'package:flutter/material.dart';
 
-import '../../core/api_client.dart';
 import '../../core/api_outcome.dart';
+import '../../core/auth_service.dart';
 import '../../widgets/pending_banner.dart';
 
 enum _AuthMode { signUp, login }
 
-/// Caregiver sign-up / log-in. Submits to the backend's auth contract,
-/// which is fully validated but returns 503 until Supabase Auth is
-/// configured (docs/api-contract.md) — this screen exists to demonstrate
-/// the form, validation, and API wiring, not to authenticate anyone yet.
+/// Caregiver sign-up / log-in against Supabase Auth.
+///
+/// On success the session is persisted by the Supabase SDK and AuthGate
+/// swaps this screen for the app. The caregiver's row in `caregivers` is
+/// created by a database trigger at signup, not from here.
 class AuthScreen extends StatefulWidget {
-  const AuthScreen({super.key, this.apiClient});
+  const AuthScreen({super.key, required this.authService});
 
-  final ApiClient? apiClient;
+  final AuthService authService;
 
   @override
   State<AuthScreen> createState() => _AuthScreenState();
@@ -23,11 +24,9 @@ class _AuthScreenState extends State<AuthScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  late final ApiClient _apiClient = widget.apiClient ?? ApiClient();
-
   _AuthMode _mode = _AuthMode.login;
   bool _submitting = false;
-  ApiOutcome<Map<String, dynamic>>? _lastOutcome;
+  ApiOutcome<String>? _lastOutcome;
 
   @override
   void dispose() {
@@ -44,11 +43,11 @@ class _AuthScreenState extends State<AuthScreen> {
     });
 
     final outcome = _mode == _AuthMode.signUp
-        ? await _apiClient.signUp(
+        ? await widget.authService.signUp(
             email: _emailController.text.trim(),
             password: _passwordController.text,
           )
-        : await _apiClient.login(
+        : await widget.authService.signIn(
             email: _emailController.text.trim(),
             password: _passwordController.text,
           );
@@ -118,7 +117,6 @@ class _AuthScreenState extends State<AuthScreen> {
               const SizedBox(height: 16),
               if (_lastOutcome case ApiPending(:final message)) PendingBanner(message: message),
               if (_lastOutcome case ApiFailure(:final message)) ErrorBanner(message: message),
-              if (_lastOutcome case ApiSuccess()) const ErrorBanner(message: 'Unexpected success from a pending endpoint.'),
             ],
           ),
         ),
